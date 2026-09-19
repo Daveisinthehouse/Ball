@@ -20,6 +20,8 @@ button.main{border:0;border-radius:999px;padding:15px 32px;background:linear-gra
 .sub{margin-top:14px;font-size:12px;color:#7180a7}
 #levelFlash{position:absolute;inset:0;z-index:7;display:none;align-items:center;justify-content:center;pointer-events:none;font-size:44px;font-weight:1000;text-shadow:0 0 35px #55d9ff}
 #power{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:6;display:none;padding:6px 12px;border-radius:999px;background:#ffffff14;border:1px solid #ffffff1c;font-size:11px;font-weight:800}
+#bossBar{position:absolute;top:68px;left:50%;transform:translateX(-50%);width:min(330px,72%);display:none;z-index:6;text-align:center;font-size:9px;font-weight:900;letter-spacing:.18em;color:#ff718b}#bossBar i{display:block;height:7px;margin-top:4px;border:1px solid #ff718b66;border-radius:99px;background:#120711;overflow:hidden}#bossBar b{display:block;width:100%;height:100%;background:linear-gradient(90deg,#ff315b,#ff9f43);transform-origin:left}
+.scoreline{font-size:13px;color:#aab4d0;margin-top:12px}.scoreline strong{color:#fff}.arcade{font-family:monospace;letter-spacing:.12em;text-transform:uppercase;color:#68ddff;font-size:10px;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -31,28 +33,29 @@ button.main{border:0;border-radius:999px;padding:15px 32px;background:linear-gra
  <div class="stat"><div class="small">Lives</div><div id="lives" class="big">3</div></div>
  <button id="pause" aria-label="Pause">Ⅱ</button>
 </div>
-<div id="power"></div><div id="levelFlash">LEVEL 1</div>
+<div id="power"></div><div id="levelFlash">LEVEL 1</div><div id="bossBar"><span>BOSS</span><i><b></b></i></div>
 <div id="overlay"><div class="card">
- <div class="logo">BALL</div><h2 id="title">ARKANOID</h2>
+ <div class="arcade">★ AMIGA ARCADE EDITION ★</div><div class="logo">BALL</div><h2 id="title">ARKANOID</h2>
  <p id="message">Break the bricks, catch the power-ups and survive as long as you can.</p>
  <button class="main" id="start">START GAME</button>
- <div class="sub">📱 Drag anywhere on the screen to move the paddle</div>
+ <div class="scoreline">HIGH SCORE <strong id="high">0</strong></div><div class="sub">📱 Drag anywhere on the screen to move the paddle</div>
 </div></div>
 </div>
 <script>
 (()=>{
 const c=document.getElementById('game'),x=c.getContext('2d'),scoreEl=document.getElementById('score'),levelEl=document.getElementById('level'),livesEl=document.getElementById('lives'),overlay=document.getElementById('overlay'),title=document.getElementById('title'),message=document.getElementById('message'),start=document.getElementById('start'),pause=document.getElementById('pause'),flash=document.getElementById('levelFlash'),powerEl=document.getElementById('power');
-let W,H,D=1,score=0,level=1,lives=3,running=false,paused=false,last=0,drag=false,audio=null,shake=0,flashTimer=0;
+let W,H,D=1,score=0,level=1,lives=3,running=false,paused=false,last=0,drag=false,audio=null,shake=0,flashTimer=0,boss=null,high=Number(localStorage.getItem('ballHighScore')||0);
 let bricks=[],parts=[],drops=[],balls=[],power={wide:0,slow:0,multi:0};
 const colors=['#ff4f70','#ff9e43','#ffd166','#40e0c0','#48a7ff','#9b63ff','#f25cff'];
 const paddle={x:0,y:0,w:100,h:13};
+document.getElementById('high').textContent=high; const bossBar=document.getElementById('bossBar');
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
 function resize(){let r=c.getBoundingClientRect();W=r.width;H=r.height;D=Math.min(devicePixelRatio||1,2);c.width=W*D;c.height=H*D;x.setTransform(D,0,0,D,0,0);paddle.y=H-Math.max(42,H*.075);paddle.w=power.wide?Math.min(175,W*.38):Math.min(112,Math.max(78,W*.25));paddle.x=clamp(paddle.x||W/2-paddle.w/2,5,W-paddle.w-5)}
 addEventListener('resize',resize);
 function beep(f,d=.05){try{if(!audio)audio=new(window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();let o=audio.createOscillator(),g=audio.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.025,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+d);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+d)}catch(e){}}
-function hud(){scoreEl.textContent=score;levelEl.textContent=level;livesEl.textContent=lives}
+function hud(){scoreEl.textContent=score;levelEl.textContent=level;livesEl.textContent=lives;document.getElementById('high').textContent=high}
 function layout(){
- bricks=[];let cols=W<520?7:10, rows=Math.min(5+Math.floor((level-1)/2),9),gap=W<520?5:7,side=W<520?10:30,bw=(W-side*2-gap*(cols-1))/cols,bh=clamp(H*.033,17,26),top=Math.max(72,H*.09);
+ bricks=[]; boss=null; bossBar.style.display='none';let cols=W<520?7:10, rows=Math.min(5+Math.floor((level-1)/2),9),gap=W<520?5:7,side=W<520?10:30,bw=(W-side*2-gap*(cols-1))/cols,bh=clamp(H*.033,17,26),top=Math.max(72,H*.09);
  for(let r=0;r<rows;r++)for(let q=0;q<cols;q++){
   let type='normal'; if(level>=3&&Math.random()<.13)type='strong'; if(level>=4&&Math.random()<.06)type='steel';
   bricks.push({x:side+q*(bw+gap),y:top+r*(bh+gap),w:bw,h:bh,hp:type==='strong'?2:type==='steel'?3:1,max:type==='strong'?2:type==='steel'?3:1,color:colors[r%colors.length],type,alive:true});
@@ -64,8 +67,11 @@ function newBall(vx=null){
 function resetBalls(){balls=[newBall()]}
 function startGame(){score=0;level=1;lives=3;power={wide:0,slow:0,multi:0};running=true;paused=false;overlay.style.display='none';layout();resetBalls();hud();powerEl.style.display='none';showLevel();beep(520,.08)}
 function showLevel(){flash.textContent='LEVEL '+level;flash.style.display='flex';clearTimeout(flashTimer);flashTimer=setTimeout(()=>flash.style.display='none',850)}
-function next(){level++;layout();resetBalls();hud();showLevel();beep(760,.08)}
-function lose(){lives--;hud();shake=10;beep(100,.15);if(lives<=0){running=false;title.textContent='GAME OVER';message.textContent='Score '+score+'  •  Level '+level;start.textContent='PLAY AGAIN';overlay.style.display='flex'}else resetBalls()}
+function next(){level++;layout();resetBalls();hud();showLevel();if(level%5===0)spawnBoss();beep(760,.08)}
+function spawnBoss(){boss={x:W/2-70,y:Math.max(92,H*.12),w:140,h:30,hp:12,max:12,vx:95};bossBar.style.display='block';updateBossBar();beep(180,.25)}
+function updateBossBar(){if(!boss)return;bossBar.querySelector('b').style.width=(100*boss.hp/boss.max)+'%'}
+
+function lose(){lives--;hud();shake=10;beep(100,.15);if(lives<=0){running=false;high=Math.max(high,score);localStorage.setItem('ballHighScore',high);hud();title.textContent='GAME OVER';message.textContent='Score '+score+'  •  Level '+level;start.textContent='PLAY AGAIN';overlay.style.display='flex'}else resetBalls()}
 function move(px){paddle.x=clamp(px-paddle.w/2,5,W-paddle.w-5);if(balls.length)for(let b of balls)if(b.stuck)b.x=paddle.x+paddle.w/2}
 function pos(e){return e.clientX}
 c.addEventListener('pointerdown',e=>{drag=true;c.setPointerCapture?.(e.pointerId);move(pos(e))});
@@ -88,12 +94,13 @@ function update(dt){
   if(rectHit(b,{x:paddle.x,y:paddle.y,w:paddle.w,h:paddle.h})&&b.vy>0){let hit=clamp((b.x-(paddle.x+paddle.w/2))/(paddle.w/2),-1,1),sp=Math.min(760,Math.hypot(b.vx,b.vy)*1.012),ang=hit*1.18;b.vx=sp*Math.sin(ang);b.vy=-Math.abs(sp*Math.cos(ang));b.y=paddle.y-b.r-2;beep(260)}
   let hitBrick=null;
   for(let q of bricks)if(q.alive&&rectHit(b,q)){hitBrick=q;break}
+  if(!hitBrick&&boss&&rectHit(b,boss)){boss.hp--;score+=100;updateBossBar();particle(b.x,b.y,'#ff5577',14);shake=5;beep(520,.06);let ox=Math.min(b.x+b.r-boss.x,boss.x+boss.w-(b.x-b.r)),oy=Math.min(b.y+b.r-boss.y,boss.y+boss.h-(b.y-b.r));if(ox<oy)b.vx*=-1;else b.vy*=-1;if(boss.hp<=0){score+=2000;particle(boss.x+boss.w/2,boss.y+boss.h/2,'#ff5577',50);boss=null;bossBar.style.display='none';hud();beep(90,.4)}}
   if(hitBrick){let q=hitBrick;q.hp--;score+=q.type==='steel'?5:10;hud();particle(b.x,b.y,q.color);if(q.hp<=0){q.alive=false;score+=q.max*10;drop(q.x+q.w/2,q.y+q.h/2);beep(360+level*20)}else beep(230);let ox=Math.min(b.x+b.r-q.x,q.x+q.w-(b.x-b.r)),oy=Math.min(b.y+b.r-q.y,q.y+q.h-(b.y-b.r));if(ox<oy)b.vx*=-1;else b.vy*=-1;shake=3}
   if(b.y-b.r>H)balls.splice(i,1);
  }
  for(let i=drops.length-1;i>=0;i--){let d=drops[i];d.y+=d.vy*dt;if(d.y>H)drops.splice(i,1);else if(d.y+d.h>=paddle.y&&d.x+d.w>=paddle.x&&d.x<=paddle.x+paddle.w){apply(d.t);drops.splice(i,1)}}
  if(!balls.length)lose();
- if(bricks.length&&!bricks.some(b=>b.alive)){score+=100*level;hud();next()}
+ if(bricks.length&&!bricks.some(b=>b.alive)&&!boss){score+=100*level;hud();next()}
  for(let i=parts.length-1;i>=0;i--){let p=parts[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.life<=0)parts.splice(i,1)}
 }
 function rr(px,py,w,h,r){x.beginPath();x.roundRect(px,py,w,h,r)}
@@ -101,6 +108,7 @@ function draw(){
  x.clearRect(0,0,W,H);x.save();if(shake>0){x.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.88;if(shake<.2)shake=0}
  // background stars
  x.fillStyle='#ffffff18';for(let i=0;i<70;i++){let sx=(i*97)%W,sy=70+(i*53)%(Math.max(1,H-100));x.fillRect(sx,sy,1.5,1.5)}
+ if(boss){boss.x+=boss.vx*dt;if(boss.x<8||boss.x+boss.w>W-8){boss.vx*=-1;boss.x=clamp(boss.x,8,W-boss.w-8)}x.fillStyle='#ff315b';x.shadowColor='#ff315b';x.shadowBlur=18;rr(boss.x,boss.y,boss.w,boss.h,8);x.fill();x.shadowBlur=0;x.fillStyle='#ffb3c1';x.font='900 10px monospace';x.textAlign='center';x.fillText('BOSS CORE',boss.x+boss.w/2,boss.y+20)}
  for(let b of bricks)if(b.alive){x.shadowBlur=b.type==='steel'?8:5;x.shadowColor=b.color;x.fillStyle=b.type==='steel'?'#667089':b.color;rr(b.x,b.y,b.w,b.h,5);x.fill();x.shadowBlur=0;x.fillStyle='#ffffff35';rr(b.x+2,b.y+2,b.w-4,Math.max(3,b.h*.22),3);x.fill();if(b.hp>1){x.fillStyle='#ffffffaa';x.font='bold 10px system-ui';x.textAlign='center';x.fillText(b.hp,b.x+b.w/2,b.y+b.h*.72)}}
  for(let d of drops){let cc=d.t==='W'?'#4cc9f0':d.t==='S'?'#ffd166':d.t==='M'?'#c77dff':'#7dff9a';x.fillStyle=cc;x.shadowColor=cc;x.shadowBlur=12;rr(d.x,d.y,d.w,d.h,8);x.fill();x.shadowBlur=0;x.fillStyle='#061020';x.font='900 11px system-ui';x.textAlign='center';x.fillText(d.t,d.x+d.w/2,d.y+13)}
  x.shadowColor='#7be6ff';x.shadowBlur=18;x.fillStyle='#f8fdff';rr(paddle.x,paddle.y,paddle.w,paddle.h,8);x.fill();x.shadowBlur=0;
