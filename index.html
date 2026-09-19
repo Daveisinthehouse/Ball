@@ -235,7 +235,7 @@
         const overlapR = b.x+b.w-(ball.x-ball.r);
         const overlapT = ball.y+ball.r-b.y;
         const overlapB = b.y+b.h-(ball.y-ball.r);
-        if (Math.min(overL=overlapL,overR=overlapR) < Math.min(overlapT,overlapB)) ball.vx *= -1;
+        if (Math.min(overlapL,overlapR) < Math.min(overlapT,overlapB)) ball.vx *= -1;
         else ball.vy *= -1;
         break;
       }
